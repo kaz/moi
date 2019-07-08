@@ -5,11 +5,10 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"strconv"
 	"sync"
 	"time"
-
-	"github.com/go-redis/redis"
 )
 
 var (
@@ -99,23 +98,33 @@ func gameStarter() {
 }
 
 func answerQueryer() {
-	rdb := redis.NewClient(&redis.Options{
-		Addr: ":6379",
-	})
+	buf := make([]byte, 12)
 
-	fmt.Println("Communicate with redis ...")
-	fmt.Println(rdb.Ping().Result())
-
-	que := <-queCh
-
-	ans, err := rdb.HGet(que[0], que[1]).Result()
+	redis, err := net.Dial("tcp", ":6379")
 	if err != nil {
-		fmt.Println(">>>", que)
-		deleteGame()
+		panic(err)
+	}
+	if _, err := redis.Write([]byte("*3\r\n$4\r\nHGET\r\n$25\r\n")); err != nil {
 		panic(err)
 	}
 
-	ansCh <- ans
+	que := <-queCh
+
+	t := time.Now()
+	data := fmt.Sprintf("%s\r\n$%d\r\n%s\r\n", que[0], len(que[1]), que[1])
+	if _, err := redis.Write([]byte(data)); err != nil {
+		panic(err)
+	}
+
+	if n, err := redis.Read(buf); err != nil {
+		panic(err)
+	} else if n != 12 {
+		deleteGame()
+		panic(fmt.Errorf("error:%v, query:%v", err, que))
+	}
+	fmt.Println(">>>", time.Since(t))
+
+	ansCh <- string(buf[4:10])
 
 	wg.Done()
 }
