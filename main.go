@@ -100,7 +100,7 @@ func gameStarter() {
 func answerQueryer() {
 	buf := make([]byte, 12)
 
-	redis, err := net.Dial("tcp", ":6379")
+	redis, err := net.Dial("unix", "/var/run/redis/redis.sock")
 	if err != nil {
 		panic(err)
 	}
@@ -109,8 +109,6 @@ func answerQueryer() {
 	}
 
 	que := <-queCh
-
-	t := time.Now()
 	data := fmt.Sprintf("%s\r\n$%d\r\n%s\r\n", que[0], len(que[1]), que[1])
 	if _, err := redis.Write([]byte(data)); err != nil {
 		panic(err)
@@ -122,7 +120,6 @@ func answerQueryer() {
 		deleteGame()
 		panic(fmt.Errorf("error:%v, query:%v", err, que))
 	}
-	fmt.Println(">>>", time.Since(t))
 
 	ansCh <- string(buf[4:10])
 
